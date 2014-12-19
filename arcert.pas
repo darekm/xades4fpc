@@ -1,24 +1,72 @@
-{.$IFDEF XHTML}
- {%main htarcert}
-{.$ELSE}
+{****************************************************************************
+*                                                                           *
+*                                                            *
+*                                                                           *
+*                                                                           *
+* Language:             FPC Pascal v2.2.0+ / Delphi 6+                      *
+*                                                                           *
+* Required switches:    none                                                *
+*                                                                           *
+* Author:               Dariusz Mazur                                       *
+* Date:                 20.01.2010                                          *
+* Version:              0.9                                                 *
+* Licence:              MPL or GPL
+*                                                                           *
+*        Send bug reports and feedback to  darekm @@ emadar @@ com          *
+*   You can always get the latest version/revision of this package from     *
+*                                                                           *
+*           http://www.emadar.com/fpc/lockfree.htm                          *
+*                                                                           *
+*                                                                           *
+* Description:  Cert component to hangle Certificate store                  *
+*               proposed by Dariusz Mazur                                   *
+* caution : if You set too small size of array and store data excess size   *
+*           of queue data will be lost                                      *
+*                                                                           *
+*  This program is distributed in the hope that it will be useful,          *
+*  but WITHOUT ANY WARRANTY; without even the implied warranty of           *
+*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.                     *
+*                                                                           *
+*                                                                           *
+*****************************************************************************
+*                      BEGIN LICENSE BLOCK                                  *
 
-{.$I start.inc}
+The contents of this file are subject to the Mozilla Public License
+Version 1.1 (the "License"); you may not use this file except in compliance
+with the License. You may obtain a copy of the License at
+http://www.mozilla.org/MPL/
+
+Software distributed under the License is distributed on an "AS IS" basis,
+WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License for
+the specific language governing rights and limitations under the License.
+
+The Original Code is: flqueue.pas, released 20.01.2008.
+The Initial Developer of the Original Code is Dariusz Mazur
+
+
+Alternatively, the contents of this file may be used under the terms of the
+GNU General Public License Version 2 (the "GPL"), in which case
+the provisions of the GPL are applicable instead of those above.
+If you wish to allow use of your version of this file only under the terms
+of the GPL and not to allow others to use your version of this file
+under the MPL, indicate your decision by deleting the provisions above and
+replace them with the notice and other provisions required by the GPL.
+If you do not delete the provisions above, a recipient may use your version
+of this file under either the MPL or the GPL.
+
+*                     END LICENSE BLOCK                                     * }
+
+
+
 
 unit arcert;
 {$H+}
-
 interface
+
 uses
   Classes,
-  kom2,
-//  Graphics,
-//  int128,
   SysUtils;
-//  strutil,
-  //wpstring,
-//      EncdDecd;
-//      synacode,
-{.$ENDIF}
+
 
   type
   THashAlgorithm = ({$IFDEF SHA1}     haSHA1     {$ELSE}haReserved0{$ENDIF},
@@ -47,7 +95,7 @@ uses
                    );
 
 
-  type
+type
 
   tCertificate = class
   protected
@@ -58,18 +106,18 @@ uses
     FValidTo: TDateTime;
     FValidFrom: TDateTime;
     FSerialNumber: string;
-    fIssuerUniqueID : string;
-    fSubjectUniqueID : string;
-    fSignatureAlgorithm : string;
+    fIssuerUniqueID: string;
+    fSubjectUniqueID: string;
+    fSignatureAlgorithm: string;
     FFriendlyName: string;
-    fSHA1    : string;
+    fSHA1: string;
     f509Data: string;
-    f509Digest : string;
-    function getSerialNumberDec:string;
-    function getSerialNumberHex:string;
+    f509Digest: string;
+    function getSerialNumberDec: string;
+    function getSerialNumberHex: string;
 
-   public
-    storePos : integer;
+  public
+    storePos: integer;
     property IssuedTo: string read FIssuedTo;
     property IssuedBy: string read FIssuedBy;
     property FriendlyName: string read FFriendlyName;
@@ -79,79 +127,77 @@ uses
     property SerialNumberHex: string read getSerialNumberHex;
     property SerialNumberDec: string read getSerialNumberDec;
     property XSHA1: string read FSHA1;
-    property signatureAlgorith : string read fSignatureAlgorithm;
-    property IssuerUniqueID : string read fIssuerUniqueId;
-    property issuerName : string read fIssuerName;
-    property X509Data : ansistring read f509Data;
+    property signatureAlgorith: string read fSignatureAlgorithm;
+    property IssuerUniqueID: string read fIssuerUniqueId;
+    property issuerName: string read fIssuerName;
+    property X509Data: string read f509Data;
 
-//    function getProviderHandle:HCRYPTPROV;
-    function GetSignatureValue(const AXml: string): string;virtual;
-    function GetDigestValue(const AXml: string): string;virtual;
-    property x509Digest:ansistring read f509Digest;
-//    class function GetLastErrorText(const AFuncName: string): string;
-    function allName : ansiString;
-    function fullname : ansiString;
-    end;
+    function GetSignatureValue(const AXml: string): string; virtual;
+    function GetDigestValue(const AXml: string): string; virtual;
+    property x509Digest: string read f509Digest;
+    function all: string;
+    function title: string;
+    function toXml: utf8String;
+  end;
 
 
 type
   ECertificateError = class(Exception);
 
 implementation
+
+uses
+  flxml,      // private unit used to presentation
+  wpdate,
+  wpstring;
+
 const
 
- CRYPT_E_NOT_FOUND             =   ($80092004);//2148081668
- CRYPT_E_SELF_SIGNED           =   ($80092007);
+  CRYPT_E_NOT_FOUND = ($80092004);//2148081668
+  CRYPT_E_SELF_SIGNED = ($80092007);
 
 
-
-
-
-{
-constructor tCertificate.Create(ACertContext: PCCERT_CONTEXT);
+function tCertificate.all: string;
 begin
-  inherited Create();
-  FCertContext := CertDuplicateCertificateContext(ACertContext);
-  GetCertInfo();
+  Result := 'issuedBy:' + fIssuedBy + #10;
+  Result := Result + 'issuedTo:' + fIssuedTo + #10;
+  Result := Result + 'issuerName:' + fIssuerName + #10;
+  Result := Result + 'serialnumber:' + fSerialNumber + #10;
+  Result := Result + 'subjectunique:' + fSubjectUniqueID + #10;
+  Result := Result + 'friendlyName:' + fFriendlyName + #10;
+  Result := Result + 'sha1:' + fsha1;
 end;
 
-destructor tCertificate.Destroy;
+function tCertificate.title;
 begin
-  CertFreeCertificateContext(FCertContext);
-  inherited Destroy();
-end;
-}
-function tCertificate.allname;
-begin
-  result:='issuedBy:'+fIssuedBy+#10;
-  result:=result+'issuedTo:'+fIssuedTo+#10;
-  result:=result+'issuerName:'+fIssuerName+#10;
-  result:=result+'serialnumber:'+fSerialNumber+#10;
-  result:=result+'subjectunique:'+fSubjectUniqueID+#10;
-  result:=result+'friendlyName:'+fFriendlyName+#10;
-  result:=result+'sha1:'+fsha1;
+  Result := pad(issuerName, 33) + ' ' + pad(issuedto, 28) + date4st(ValidTo) + ' ' + serialNumberHex;
 end;
 
-function tCertificate.fullname;
+function tCertificate.getSerialNumberDec: string;
 begin
-  result:=issuerName+ '  : '+issuedto;
+  Result := BinToDec(fSerialNumber);
 end;
 
-function tCertificate.getSerialNumberDec;
+function tCertificate.getSerialNumberHex: string;
 begin
-  result:=BinToDec(fSerialNumber);
+  Result := BinToHEX(fSerialNumber);
 end;
-function tCertificate.getSerialNumberHex;
+
+function tCertificate.GetSignatureValue(const AXml: string): string;
 begin
-  result:=BinToHEX(fSerialNumber);
+  Result := '';
 end;
-function tCertificate.GetSignatureValue;
+
+function tCertificate.GetDigestValue(const AXml: string): string;
 begin
-  result:='';
+  Result := '';
 end;
-function tCertificate.GetDigestValue;
+
+function tCertificate.toXml;
 begin
-  result:='';
+  Result := px('SerialNumber', serialNumberHex) + px(
+    'IssuerName', IssuerName) + px('X509Data', x509Data) +
+    px('ValidTo', dbl2int64(ValidTo)) + px('ValidFrom', dbl2int64(ValidFrom));
 end;
 
 
